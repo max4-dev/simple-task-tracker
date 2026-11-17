@@ -1,0 +1,4 @@
+interface:
+  display_name: "Backend и данные"
+  short_description: "NestJS, Prisma, Redis и cookie-авторизация"
+  default_prompt: "Используй $tt-backend для текущей задачи таск-трекера."

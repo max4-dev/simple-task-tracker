@@ -1,0 +1,446 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["app"]
+}
+
+enum OrganizationPermission {
+  EDIT_ORGANIZATION
+  MANAGE_MEMBERS
+  MANAGE_ROLES
+  MANAGE_INVITATIONS
+  CREATE_PROJECTS
+
+  @@schema("app")
+}
+
+enum ProjectPermission {
+  VIEW_PROJECT
+  EDIT_PROJECT
+  DELETE_PROJECT
+  MANAGE_MEMBERS
+  MANAGE_ROLES
+  MANAGE_STATUSES
+  MANAGE_TAGS
+  MANAGE_REPOSITORIES
+  CREATE_TASKS
+  EDIT_TASKS
+  DELETE_TASKS
+  ASSIGN_TASKS
+
+  @@schema("app")
+}
+
+enum TaskStatusCategory {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  CANCELED
+
+  @@schema("app")
+}
+
+enum TaskAssignmentKind {
+  RESPONSIBLE
+  ASSIGNEE
+  REVIEWER
+
+  @@schema("app")
+}
+
+enum NotificationKind {
+  TASK_ASSIGNED
+  TASK_REVIEW_REQUESTED
+  ORGANIZATION_INVITED
+  PROJECT_ADDED
+
+  @@schema("app")
+}
+
+enum EmailDeliveryStatus {
+  DISABLED
+  PENDING
+  SENT
+  FAILED
+
+  @@schema("app")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String
+  password        String
+  /// Existing platform role; unrelated to organization/project roles.
+  role            String    @default("USER")
+  tokenVersion    Int       @default(0)
+  /// NULL is unverified. Development bypass must not pretend verification occurred.
+  emailVerifiedAt DateTime? @db.Timestamptz(3)
+  avatarUrl       String?
+  phone           String?
+  bio             String?   @db.Text
+  githubUrl       String?
+  timeZone        String    @default("UTC")
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  socialLinks            UserSocialLink[]
+  workIntervals          UserWorkInterval[]
+  memberships            OrganizationMember[]
+  createdTasks           Task[]                   @relation("TaskCreator")
+  uploadedAttachments    TaskAttachment[]
+  sentInvitations        OrganizationInvitation[] @relation("InvitationSender")
+  acceptedInvitations    OrganizationInvitation[] @relation("InvitationAcceptor")
+  notifications          Notification[]           @relation("NotificationRecipient")
+  triggeredNotifications Notification[]           @relation("NotificationActor")
+
+  @@schema("app")
+}
+
+model UserSocialLink {
+  id       String  @id @default(uuid())
+  userId   String
+  label    String?
+  url      String
+  position Int     @default(0)
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, url])
+  @@schema("app")
+}
+
+/// Recurring local-time intervals in User.timeZone. ISO weekday 1=Monday, 7=Sunday.
+/// Overnight shifts use two rows. "Working now" is computed, never stored.
+model UserWorkInterval {
+  id          String @id @default(uuid())
+  userId      String
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekday, startMinute])
+  @@schema("app")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  /// The sole system owner. Membership FK is deferred in the SQL migration.
+  ownerUserId String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  owner       OrganizationMember       @relation("OrganizationOwner", fields: [id, ownerUserId], references: [organizationId, userId], onDelete: NoAction, onUpdate: NoAction)
+  members     OrganizationMember[]     @relation("OrganizationMembers")
+  roles       OrganizationRole[]
+  projects    Project[]
+  invitations OrganizationInvitation[]
+
+  @@unique([id, ownerUserId])
+  @@schema("app")
+}
+
+/// Custom roles only: "owner" is reserved and derived from Organization.ownerUserId.
+model OrganizationRole {
+  id                      String                   @id @default(uuid())
+  organizationId          String
+  name                    String
+  description             String?
+  organizationPermissions OrganizationPermission[] @default([])
+  projectPermissions      ProjectPermission[]      @default([])
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @db.Timestamptz(3)
+
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members          OrganizationMember[]
+  projectMembers   ProjectMember[]
+  projectOverrides ProjectRoleOverride[]
+  invitations      OrganizationInvitation[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, id])
+  @@schema("app")
+}
+
+model OrganizationMember {
+  organizationId String
+  userId         String
+  /// NULL gives no custom-role permissions; owner permissions are unconditional.
+  roleId         String?
+  joinedAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  organization      Organization      @relation("OrganizationMembers", fields: [organizationId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role              OrganizationRole? @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction)
+  ownedOrganization Organization?     @relation("OrganizationOwner")
+  projects          ProjectMember[]
+
+  @@id([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId, roleId])
+  @@schema("app")
+}
+
+model Project {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?   @db.Text
+  /// Unique within the organization; frozen after the first task is issued.
+  taskPrefix     String
+  /// Allocated atomically by the task-number trigger, not by MAX(number) + 1.
+  lastTaskNumber Int       @default(0)
+  archivedAt     DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members       ProjectMember[]
+  roleOverrides ProjectRoleOverride[]
+  statuses      TaskStatus[]
+  tags          TaskTag[]
+  tasks         Task[]
+  repositories  ProjectRepository[]
+
+  @@unique([organizationId, slug])
+  @@unique([organizationId, taskPrefix])
+  @@unique([organizationId, id])
+  @@schema("app")
+}
+
+/// Only explicit deltas are stored. Missing permissions keep inheriting the organization role.
+model ProjectRoleOverride {
+  organizationId   String
+  projectId        String
+  roleId           String
+  allowPermissions ProjectPermission[] @default([])
+  denyPermissions  ProjectPermission[] @default([])
+
+  project Project          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  role    OrganizationRole @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([projectId, roleId])
+  @@index([organizationId, roleId])
+  @@schema("app")
+}
+
+model ProjectMember {
+  organizationId   String
+  projectId        String
+  userId           String
+  /// NULL inherits the member's current organization role, not a copied role ID.
+  roleId           String?
+  allowPermissions ProjectPermission[] @default([])
+  denyPermissions  ProjectPermission[] @default([])
+  joinedAt         DateTime            @default(now()) @db.Timestamptz(3)
+
+  project     Project            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  member      OrganizationMember @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Cascade)
+  role        OrganizationRole?  @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction)
+  assignments TaskAssignment[]
+
+  @@id([projectId, userId])
+  @@index([organizationId, userId])
+  @@index([organizationId, roleId])
+  @@index([userId])
+  @@schema("app")
+}
+
+/// A project's board is its tasks grouped by these ordered statuses.
+model TaskStatus {
+  id        String             @id @default(uuid())
+  projectId String
+  name      String
+  color     String             @default("#64748b")
+  category  TaskStatusCategory @default(TODO)
+  position  Int                @default(0)
+  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@unique([projectId, id])
+  @@unique([projectId, name])
+  @@index([projectId, position])
+  @@schema("app")
+}
+
+model TaskTag {
+  id           String  @id @default(uuid())
+  projectId    String
+  name         String
+  /// e.g. feat, bug, hotfix; forms the suggested branch prefix.
+  branchPrefix String
+  color        String  @default("#64748b")
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks        Task[]
+
+  @@unique([projectId, id])
+  @@unique([projectId, name])
+  @@unique([projectId, branchPrefix])
+  @@schema("app")
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  projectId   String
+  /// 0 is an insert sentinel; PostgreSQL replaces it with the next project number.
+  number      Int       @default(0)
+  title       String
+  description String    @default("") @db.Text
+  statusId    String
+  tagId       String?
+  creatorId   String?
+  /// Object storage URL/key resolution and markdown rendering are future application work.
+  previewUrl  String?
+  position    Decimal   @default(0) @db.Decimal(30, 15)
+  dueAt       DateTime? @db.Timestamptz(3)
+  archivedAt  DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status        TaskStatus       @relation(fields: [projectId, statusId], references: [projectId, id], onDelete: NoAction, onUpdate: NoAction)
+  tag           TaskTag?         @relation(fields: [projectId, tagId], references: [projectId, id], onDelete: NoAction, onUpdate: NoAction)
+  creator       User?            @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  assignments   TaskAssignment[]
+  attachments   TaskAttachment[]
+  branches      TaskBranch[]
+  notifications Notification[]
+
+  @@unique([projectId, number])
+  @@unique([projectId, id])
+  @@index([projectId, statusId, archivedAt, position])
+  @@index([projectId, tagId])
+  @@index([creatorId])
+  @@schema("app")
+}
+
+model TaskAssignment {
+  projectId String
+  taskId    String
+  userId    String
+  kind      TaskAssignmentKind
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+
+  task   Task          @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Cascade)
+  member ProjectMember @relation(fields: [projectId, userId], references: [projectId, userId], onDelete: Cascade)
+
+  @@id([taskId, userId, kind])
+  @@index([projectId, userId])
+  @@schema("app")
+}
+
+/// Upload metadata only; file bytes live outside PostgreSQL.
+model TaskAttachment {
+  id           String   @id @default(uuid())
+  taskId       String
+  storageKey   String   @unique
+  fileName     String
+  mimeType     String
+  sizeBytes    BigInt
+  uploadedById String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([uploadedById])
+  @@schema("app")
+}
+
+model ProjectRepository {
+  id                 String  @id @default(uuid())
+  projectId          String
+  /// Public repository metadata, never credentials or installation tokens.
+  url                String
+  githubRepositoryId BigInt?
+  defaultBranch      String  @default("main")
+
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branches TaskBranch[]
+
+  @@unique([projectId, url])
+  @@unique([projectId, id])
+  @@schema("app")
+}
+
+/// A task can span several repositories. No row until a branch is linked; suggestion is derived.
+model TaskBranch {
+  id           String @id @default(uuid())
+  projectId    String
+  taskId       String
+  repositoryId String
+  name         String
+
+  task       Task              @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Cascade)
+  repository ProjectRepository @relation(fields: [projectId, repositoryId], references: [projectId, id], onDelete: Cascade)
+
+  @@unique([repositoryId, name])
+  @@index([projectId, taskId])
+  @@schema("app")
+}
+
+model OrganizationInvitation {
+  id             String    @id @default(uuid())
+  organizationId String
+  email          String
+  roleId         String
+  /// Store only a digest of a cryptographically random invitation token.
+  tokenHash      String    @unique
+  invitedById    String?
+  acceptedById   String?
+  expiresAt      DateTime  @db.Timestamptz(3)
+  acceptedAt     DateTime? @db.Timestamptz(3)
+  revokedAt      DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  organization  Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role          OrganizationRole @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction)
+  invitedBy     User?            @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  acceptedBy    User?            @relation("InvitationAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+  notifications Notification[]
+
+  @@index([organizationId, roleId])
+  @@index([email, expiresAt])
+  @@index([invitedById])
+  @@index([acceptedById])
+  @@schema("app")
+}
+
+/// Inbox event with immutable display snapshots; email transport is not implemented yet.
+model Notification {
+  id           String              @id @default(uuid())
+  recipientId  String
+  actorId      String?
+  taskId       String?
+  invitationId String?
+  kind         NotificationKind
+  title        String
+  body         String              @db.Text
+  readAt       DateTime?           @db.Timestamptz(3)
+  emailStatus  EmailDeliveryStatus @default(DISABLED)
+  emailedAt    DateTime?           @db.Timestamptz(3)
+  createdAt    DateTime            @default(now()) @db.Timestamptz(3)
+
+  recipient  User                    @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor      User?                   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  task       Task?                   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  invitation OrganizationInvitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([actorId])
+  @@index([taskId])
+  @@index([invitationId])
+  @@index([emailStatus, createdAt])
+  @@schema("app")
+}

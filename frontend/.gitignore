@@ -1,0 +1,16 @@
+# Shared rules are in ../.gitignore. Paths here are relative to frontend/.
+
+# Next.js and deployment output
+/.next/
+/out/
+.vercel/
+next-env.d.ts
+
+# Optional Yarn runtime; keep shared Yarn configuration
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions

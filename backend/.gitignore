@@ -1,0 +1,13 @@
+# Shared rules are in ../.gitignore. Paths here are relative to backend/.
+
+# Generated Prisma client; schema and migrations remain versioned
+/src/generated/prisma/
+
+# Local runtime data; Compose named volumes live outside the repository
+/uploads/
+/storage/
+/backups/
+/dumps/
+/postgres-data/
+/redis-data/
+/pgdata/

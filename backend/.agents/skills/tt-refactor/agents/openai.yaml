@@ -1,0 +1,4 @@
+interface:
+  display_name: "Безопасный рефакторинг"
+  short_description: "Изменение структуры с сохранением поведения"
+  default_prompt: "Используй $tt-refactor для текущей задачи таск-трекера."

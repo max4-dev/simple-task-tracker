@@ -1,0 +1,4 @@
+interface:
+  display_name: "Требования к функции"
+  short_description: "Сценарии, границы и критерии готовности"
+  default_prompt: "Используй $tt-prd для текущей задачи таск-трекера."

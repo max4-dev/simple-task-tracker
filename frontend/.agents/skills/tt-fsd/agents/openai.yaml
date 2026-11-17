@@ -1,0 +1,4 @@
+interface:
+  display_name: "FSD проекта"
+  short_description: "Границы слоёв и публичный API компонентов"
+  default_prompt: "Используй $tt-fsd для текущей задачи таск-трекера."

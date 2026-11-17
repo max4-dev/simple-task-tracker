@@ -1,0 +1,4 @@
+interface:
+  display_name: "Интерфейс таск-трекера"
+  short_description: "shadcn, формы, состояния и доступность"
+  default_prompt: "Используй $tt-ui для текущей задачи таск-трекера."

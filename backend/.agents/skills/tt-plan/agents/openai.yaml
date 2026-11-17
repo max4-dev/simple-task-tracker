@@ -1,0 +1,4 @@
+interface:
+  display_name: "Исследование и план"
+  short_description: "План изменений с контрактами и проверками"
+  default_prompt: "Используй $tt-plan для текущей задачи таск-трекера."

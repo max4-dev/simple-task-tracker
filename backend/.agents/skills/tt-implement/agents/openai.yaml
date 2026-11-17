@@ -1,0 +1,4 @@
+interface:
+  display_name: "Реализация функции"
+  short_description: "От конкретной задачи до проверенного кода"
+  default_prompt: "Используй $tt-implement для текущей задачи таск-трекера."

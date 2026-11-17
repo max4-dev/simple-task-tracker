@@ -1,0 +1,7 @@
+interface:
+  display_name: "Функция с ревью"
+  short_description: "Реализация и независимое ревью изменений"
+  default_prompt: "Используй $tt-feature-review для текущей задачи таск-трекера."
+
+policy:
+  allow_implicit_invocation: false
