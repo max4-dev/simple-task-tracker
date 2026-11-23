@@ -23,6 +23,7 @@ const invitationSelect = {
   organizationId: true,
   email: true,
   roleId: true,
+  roleName: true,
   invitedById: true,
   expiresAt: true,
   createdAt: true,
@@ -44,7 +45,7 @@ export class OrganizationInvitationsService {
     return this.access.mutate(organizationId, userId, async (tx) => {
       const role = await tx.organizationRole.findUnique({
         where: { organizationId_id: { organizationId, id: dto.roleId } },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (!role) throw new NotFoundException('Роль не найдена');
       const member = await tx.organizationMember.findFirst({
@@ -86,6 +87,7 @@ export class OrganizationInvitationsService {
           organizationId,
           email: dto.email,
           roleId: dto.roleId,
+          roleName: role.name,
           invitedById: userId,
           tokenHash: digest(token),
           expiresAt: new Date(now.getTime() + 7 * TIME.ONE_DAY.IN_MS),
@@ -149,6 +151,7 @@ export class OrganizationInvitationsService {
       });
       if (
         !invitation ||
+        !invitation.roleId ||
         invitation.acceptedAt ||
         invitation.revokedAt ||
         invitation.expiresAt <= new Date()

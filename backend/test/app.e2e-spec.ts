@@ -1,3 +1,4 @@
+import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import { jest } from '@jest/globals';
 import { RedisService } from '../src/common/redis/redis.service.js';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -15,6 +16,8 @@ describe('AppController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
+      .overrideProvider(ThrottlerStorage)
+      .useValue(new ThrottlerStorageService())
       .overrideProvider(PrismaService)
       .useValue({ $queryRaw: query })
       .overrideProvider(RedisService)

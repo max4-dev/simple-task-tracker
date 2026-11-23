@@ -35,7 +35,10 @@ export class InvitationDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ format: 'uuid' }) organizationId: string;
   @ApiProperty() email: string;
-  @ApiProperty({ format: 'uuid' }) roleId: string;
+  @ApiProperty({ type: String, nullable: true, format: 'uuid' }) roleId:
+    string | null;
+  @ApiProperty({ description: 'Role name at invitation creation' })
+  roleName: string;
   @ApiProperty({ type: String, nullable: true, format: 'uuid' }) invitedById:
     string | null;
   @ApiProperty({ type: String, format: 'date-time' }) expiresAt: Date;

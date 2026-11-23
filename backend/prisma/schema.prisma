@@ -56,6 +56,19 @@ enum TaskAssignmentKind {
   @@schema("app")
 }
 
+enum TaskEventKind {
+  CREATED
+  UPDATED
+  ASSIGNMENTS_CHANGED
+  ARCHIVED
+  RESTORED
+  STATUS_REPLACED
+  MEMBER_REMOVED
+  MOVED
+
+  @@schema("app")
+}
+
 enum NotificationKind {
   TASK_ASSIGNED
   TASK_REVIEW_REQUESTED
@@ -92,6 +105,7 @@ model User {
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
 
+  taskEvents             TaskEvent[]
   socialLinks            UserSocialLink[]
   workIntervals          UserWorkInterval[]
   memberships            OrganizationMember[]
@@ -175,7 +189,7 @@ model OrganizationRole {
 model OrganizationMember {
   organizationId String
   userId         String
-  /// NULL gives no custom-role permissions; owner permissions are unconditional.
+  /// NULL means no visual specialization; access comes from membership, not role permissions.
   roleId         String?
   joinedAt       DateTime @default(now()) @db.Timestamptz(3)
 
@@ -201,6 +215,7 @@ model Project {
   taskPrefix     String
   /// Allocated atomically by the task-number trigger, not by MAX(number) + 1.
   lastTaskNumber Int       @default(0)
+  boardRevision  Int       @default(1)
   archivedAt     DateTime? @db.Timestamptz(3)
   createdAt      DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
@@ -295,6 +310,7 @@ model Task {
   projectId   String
   /// 0 is an insert sentinel; PostgreSQL replaces it with the next project number.
   number      Int       @default(0)
+  revision    Int       @default(1)
   title       String
   description String    @default("") @db.Text
   statusId    String
@@ -312,6 +328,7 @@ model Task {
   status        TaskStatus       @relation(fields: [projectId, statusId], references: [projectId, id], onDelete: NoAction, onUpdate: NoAction)
   tag           TaskTag?         @relation(fields: [projectId, tagId], references: [projectId, id], onDelete: NoAction, onUpdate: NoAction)
   creator       User?            @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  events        TaskEvent[]
   assignments   TaskAssignment[]
   attachments   TaskAttachment[]
   branches      TaskBranch[]
@@ -319,9 +336,27 @@ model Task {
 
   @@unique([projectId, number])
   @@unique([projectId, id])
-  @@index([projectId, statusId, archivedAt, position])
+  @@index([projectId, statusId, archivedAt, position, id])
   @@index([projectId, tagId])
   @@index([creatorId])
+  @@schema("app")
+}
+
+/// Minimal transactional history, not a notification queue or a document version store.
+model TaskEvent {
+  id        String        @id @default(uuid())
+  taskId    String
+  revision  Int
+  actorId   String?
+  kind      TaskEventKind
+  changes   Json          @db.JsonB
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, revision])
+  @@index([actorId])
   @@schema("app")
 }
 
@@ -394,7 +429,8 @@ model OrganizationInvitation {
   id             String    @id @default(uuid())
   organizationId String
   email          String
-  roleId         String
+  roleId         String?
+  roleName       String
   /// Store only a digest of a cryptographically random invitation token.
   tokenHash      String    @unique
   invitedById    String?
@@ -405,7 +441,7 @@ model OrganizationInvitation {
   createdAt      DateTime  @default(now()) @db.Timestamptz(3)
 
   organization  Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  role          OrganizationRole @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction)
+  role          OrganizationRole? @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction)
   invitedBy     User?            @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
   acceptedBy    User?            @relation("InvitationAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
   notifications Notification[]
@@ -419,6 +455,7 @@ model OrganizationInvitation {
 
 /// Inbox event with immutable display snapshots; email transport is not implemented yet.
 model Notification {
+  sourceKey    String?             @unique
   id           String              @id @default(uuid())
   recipientId  String
   actorId      String?
@@ -438,9 +475,32 @@ model Notification {
   invitation OrganizationInvitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, readAt, createdAt])
+  @@index([recipientId, createdAt, id])
+  @@index([createdAt, id])
   @@index([actorId])
   @@index([taskId])
   @@index([invitationId])
   @@index([emailStatus, createdAt])
+  @@schema("app")
+}
+
+/// Durable assignment delivery. Scalar references survive task/event deletion until processing.
+model NotificationJob {
+  id          String    @id @default(uuid())
+  sourceKey   String    @unique
+  recipientId String
+  actorId     String?
+  taskId      String
+  kind        NotificationKind
+  title       String
+  body        String
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  availableAt DateTime  @default(now()) @db.Timestamptz(3)
+  attempts    Int       @default(0)
+  processedAt DateTime? @db.Timestamptz(3)
+  lastError   String?
+
+  @@index([processedAt, availableAt, id])
+  @@index([createdAt, id])
   @@schema("app")
 }

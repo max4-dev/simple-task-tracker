@@ -1,3 +1,4 @@
+import { replaceTaskStatus } from '../../common/database/task-history.js';
 import {
   BadRequestException,
   ConflictException,
@@ -31,6 +32,10 @@ export class ProjectStatusesService {
     dto: CreateProjectStatusDto,
   ) {
     return this.access.mutate(organizationId, projectId, userId, async (tx) => {
+      if ((await tx.taskStatus.count({ where: { projectId } })) >= 1000)
+        throw new ConflictException(
+          'В проекте может быть не более 1000 колонок',
+        );
       const last = await tx.taskStatus.aggregate({
         where: { projectId },
         _max: { position: true },
@@ -71,7 +76,6 @@ export class ProjectStatusesService {
           name: dto.name,
           category: dto.category,
           color: dto.color,
-          position: dto.position,
         },
       });
     });
@@ -109,11 +113,14 @@ export class ProjectStatusesService {
         throw new ConflictException(
           'Укажите статус, в который перенести задачи',
         );
-      if (count)
-        await tx.task.updateMany({
-          where: { projectId, statusId },
-          data: { statusId: dto.replacementStatusId },
-        });
+      if (count && dto.replacementStatusId)
+        await replaceTaskStatus(
+          tx,
+          projectId,
+          statusId,
+          dto.replacementStatusId,
+          userId,
+        );
       await tx.taskStatus.delete({
         where: { projectId_id: { projectId, id: statusId } },
       });

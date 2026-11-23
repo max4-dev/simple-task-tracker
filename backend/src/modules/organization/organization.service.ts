@@ -1,3 +1,4 @@
+import { removeMemberTaskAssignments } from '../../common/database/task-history.js';
 import {
   BadRequestException,
   Injectable,
@@ -164,6 +165,7 @@ export class OrganizationService {
         },
         data: { revokedAt: new Date() },
       });
+      await removeMemberTaskAssignments(tx, organizationId, userId, userId);
       await tx.organizationMember.delete({
         where: { organizationId_userId: { organizationId, userId } },
       });

@@ -1,3 +1,6 @@
+import { BoardModule } from './modules/board/board.module.js';
+import { NotificationModule } from './modules/notification/notification.module.js';
+import { TaskModule } from './modules/task/task.module.js';
 import { ProjectModule } from './modules/project/project.module.js';
 import { OrganizationModule } from './modules/organization/organization.module.js';
 import { APP_GUARD } from '@nestjs/core';
@@ -22,6 +25,9 @@ import { validateConfig } from './common/config/app-config/index.js';
     UserModule,
     OrganizationModule,
     ProjectModule,
+    TaskModule,
+    BoardModule,
+    NotificationModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: OriginGuard }],
 })

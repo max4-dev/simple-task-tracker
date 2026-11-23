@@ -1,3 +1,4 @@
+import { removeMemberTaskAssignments } from '../../common/database/task-history.js';
 import {
   BadRequestException,
   ConflictException,
@@ -194,6 +195,13 @@ export class ProjectMembersService {
         select: { userId: true },
       });
       if (!member) throw new NotFoundException('Участник проекта не найден');
+      await removeMemberTaskAssignments(
+        tx,
+        organizationId,
+        targetId,
+        userId,
+        projectId,
+      );
       await tx.projectMember.delete({
         where: { projectId_userId: { projectId, userId: targetId } },
       });
@@ -207,6 +215,13 @@ export class ProjectMembersService {
       userId,
       async (tx) => {
         // An owner can drop explicit participation; implicit owner access remains.
+        await removeMemberTaskAssignments(
+          tx,
+          organizationId,
+          userId,
+          userId,
+          projectId,
+        );
         await tx.projectMember.deleteMany({ where: { projectId, userId } });
       },
       true,

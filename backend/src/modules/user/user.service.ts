@@ -206,7 +206,7 @@ export class UserService {
       throw new ConflictException('Пароль уже изменён. Войдите повторно');
     // The DB version invalidates both JWTs even if Redis is temporarily unavailable.
     try {
-      await this.tokenService.removeAllUserTokens(id);
+      await this.tokenService.removeTokenVersion(id, user.tokenVersion);
     } catch {
       // Credentials already changed. Do not report a failed password change;
       // stale Redis hashes expire by TTL and cannot bypass the DB version check.

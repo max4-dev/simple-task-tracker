@@ -59,3 +59,6 @@ export { Switch } from "./switch/switch";
 export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants } from "./tabs/tabs";
 export { Textarea } from "./textarea/textarea";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./tooltip/tooltip";
+
+export { Toaster, toast } from "./toast/toast";
+export { Logo } from "./logo/logo";

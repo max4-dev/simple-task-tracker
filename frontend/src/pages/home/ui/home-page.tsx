@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Check, Ellipsis, Layers, Plus, Info, Trash2 } from "lucide-react";
+import { Check, Ellipsis, Plus, Info, Trash2 } from "lucide-react";
+
+import { BRANDING } from "@/shared/config";
 
 import {
+  Logo,
   Badge,
   Button,
   Card,
@@ -90,8 +93,8 @@ export function HomePage() {
     <main className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-10 sm:py-16">
       <header className="mb-10 space-y-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Layers className="size-4" aria-hidden="true" />
-          <span>Task tracker</span>
+          <Logo className="size-4" />
+          <span>{BRANDING.NAME}</span>
           <span aria-hidden="true">/</span>
           <span>Компоненты</span>
         </div>

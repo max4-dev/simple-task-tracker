@@ -72,24 +72,31 @@ export class OrganizationAccessService {
       tx: Prisma.TransactionClient,
       context: OrganizationContext,
     ) => Promise<T>,
+    mode: 'exclusive' | 'shared' = 'exclusive',
   ) {
-    return this.locked(organizationId, async (tx) =>
-      operation(tx, await this.context(tx, organizationId, userId)),
+    return this.locked(
+      organizationId,
+      async (tx) =>
+        operation(tx, await this.context(tx, organizationId, userId)),
+      mode,
     );
   }
 
   async locked<T>(
     organizationId: string,
     operation: (tx: Prisma.TransactionClient) => Promise<T>,
+    mode: 'exclusive' | 'shared' = 'exclusive',
   ) {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
-          // All organization writers take this lock before reading authorization.
+          // Project writers share this lock; organization writers exclude them.
           // READ COMMITTED sees the latest owner/role after a concurrent writer commits.
+          const lock =
+            mode === 'shared' ? Prisma.sql`FOR SHARE` : Prisma.sql`FOR UPDATE`;
           const rows = await tx.$queryRaw<
             { id: string }[]
-          >`SELECT "id" FROM "app"."Organization" WHERE "id" = ${organizationId} FOR UPDATE`;
+          >`SELECT "id" FROM "app"."Organization" WHERE "id" = ${organizationId} ${lock}`;
           if (!rows.length)
             throw new NotFoundException('Организация не найдена');
           return operation(tx);

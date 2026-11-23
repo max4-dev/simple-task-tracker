@@ -127,3 +127,36 @@ describe('HTTP authentication configuration', () => {
     }
   });
 });
+
+describe('trusted proxy configuration', () => {
+  const input = {
+    DATABASE_URL: databaseUrl,
+    REDIS_PASSWORD: 'test-secret',
+    JWT_SECRET: 'test-only-secret-at-least-32-characters',
+  };
+  it('defaults to no trusted forwarding peers', () => {
+    expect(validateConfig(input).TRUSTED_PROXY_CIDRS).toEqual([]);
+  });
+  it('accepts explicit IPv4/IPv6 networks', () => {
+    expect(
+      validateConfig({
+        ...input,
+        TRUSTED_PROXY_CIDRS: '127.0.0.1/32, ::1/128,10.1.0.0/16',
+      }).TRUSTED_PROXY_CIDRS,
+    ).toHaveLength(3);
+  });
+  it.each([
+    'true',
+    '*',
+    '0.0.0.0/0',
+    '::/0',
+    '10.0.0.1/33',
+    'proxy.example.com',
+    '1',
+    '127.0.0.1/no',
+  ])('rejects unsafe or invalid proxy config %s', (value) => {
+    expect(() =>
+      validateConfig({ ...input, TRUSTED_PROXY_CIDRS: value }),
+    ).toThrow('TRUSTED_PROXY_CIDRS');
+  });
+});

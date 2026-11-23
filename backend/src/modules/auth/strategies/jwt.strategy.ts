@@ -38,7 +38,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (
       !user ||
       user.tokenVersion !== payload.tokenVersion ||
-      !(await this.tokens.validateAccessToken(user.id, req.cookies.accessToken))
+      !(await this.tokens.validateAccessToken(
+        user.id,
+        user.tokenVersion,
+        req.cookies.accessToken,
+      ))
     )
       throw new UnauthorizedException();
     return user;

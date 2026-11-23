@@ -10,6 +10,7 @@ Docker Compose v2.20+.
 Модуль пользователя, маршруты и правила доступа: [docs/user-module.md](docs/user-module.md).
 Модуль организаций, owner и приглашения: [docs/organization-module.md](docs/organization-module.md).
 Модуль проектов, участники, статусы и теги: [docs/project-module.md](docs/project-module.md).
+Исправления основы, обновление окружения и контракт ошибок: [docs/foundation.md](docs/foundation.md).
 Swagger доступен на `/docs`. Для существующего окружения требуется добавить
 случайный `JWT_SECRET` (минимум 32 символа) и настроить `TRUSTED_ORIGINS`.
 
@@ -123,10 +124,8 @@ npm run test:e2e -- --runInBand
 npm run test:integration
 ```
 
-Unit и HTTP-тесты не требуют БД. HTTP-тесты подменяют Prisma и проверяют контракты
-health endpoints. `test:integration` требует сборку, доступную локальную Compose БД
-и применённые миграции: проверяет реальный Prisma Client, историю миграций и
-изоляцию ролей, не меняя данные.
+Unit и HTTP-тесты не требуют БД. HTTP-тесты подменяют Prisma/Redis и проверяют health, cookie/Origin, DTO, Swagger, доверенные прокси и лимиты смены пароля. `test:integration` требует сборку, доступную локальную Compose БД
+и применённые миграции: проверяет подключение runtime-роли и изоляцию схем, не меняя данные. Полную историю миграций, обновление заполненной схемы и согласованность Prisma проверяет `test:domain`.
 
 ## Развёртывание
 
@@ -205,3 +204,34 @@ TypeScript оставлен на 6.0.3: актуальные ts-jest и typescri
 поддерживают TypeScript 7. Prisma CLI, Client и pg-adapter используют стабильную
 7.10.1; Prisma 8 пока RC, несмотря на npm-тег latest.
 Node.js закреплён в `.nvmrc` и Docker image digest на 26.13.1.
+
+
+## Автоматические проверки
+
+`.github/workflows/backend.yml` запускает проверки из чистого checkout: npm ci,
+Prisma, lint/typecheck, unit/HTTP, tooling, агентские ссылки, Docker-сборку обоих
+образов и test:domain. Последний использует собственные временные PostgreSQL/Redis
+и проверяет runtime/migration images. Пользовательские данные не используются.
+
+```sh
+npm run test:tooling
+python3 scripts/check-agent-setup.py
+# Нужны локальные образы postgres/redis из compose.yaml:
+docker compose pull postgres redis
+npm run test:domain
+```
+
+Для проверки собранных образов дополнительно задайте DOMAIN_API_IMAGE и
+DOMAIN_MIGRATION_IMAGE с их тегами. Проверочные контейнеры и сеть удаляются
+скриптом; рабочий Compose не останавливается.
+
+## Задачи
+
+Создание и редактирование задач, назначения, фильтры, архив и история с защитой
+от конкурентной перезаписи: [контракт TaskModule](docs/task-module.md).
+
+Доска с пагинацией колонок/карточек, атомарными перемещениями и перестановкой
+колонок: [API доски](docs/board-module.md).
+
+Личные уведомления о назначениях и ревью, очередь с повторами и защита приватности:
+[NotificationModule](docs/notification-module.md). Email пока отключён.

@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import { Test } from '@nestjs/testing';
 import { type INestApplication, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -31,6 +32,8 @@ describe('User HTTP contract (database/session storage mocked)', () => {
 
   beforeAll(async () => {
     const fixture = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(ThrottlerStorage)
+      .useValue(new ThrottlerStorageService())
       .overrideProvider(PrismaService)
       .useValue({ user: { findUnique } })
       .overrideProvider(RedisService)

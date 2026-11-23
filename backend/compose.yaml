@@ -85,7 +85,9 @@ services:
     init: true
     environment:
       NODE_ENV: production
+      NOTIFICATION_WORKER_ENABLED: ${NOTIFICATION_WORKER_ENABLED:-true}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3001}
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-http://localhost:3000,http://localhost:3001}
       PORT: '3001'

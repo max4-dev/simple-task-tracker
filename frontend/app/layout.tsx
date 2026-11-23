@@ -1,8 +1,9 @@
+import { BRANDING } from "@/shared/config";
+import { QueryProvider, StylesProvider } from "@/app/providers";
+import { Toaster, TooltipProvider } from "@/shared/ui";
+import { cn } from "cn";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
-import "./globals.css";
-import { cn } from "cn";
-import { TooltipProvider } from "@/shared/ui";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -17,8 +18,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Task tracker — компоненты",
-  description: "Простой таск-трекер. Базовые компоненты интерфейса.",
+  title: { default: BRANDING.NAME, template: `%s — ${BRANDING.NAME}` },
+  applicationName: BRANDING.NAME,
+  description: BRANDING.DESCRIPTION,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -28,7 +30,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", inter.variable)}
     >
       <body className="min-h-full flex flex-col">
-        <TooltipProvider>{children}</TooltipProvider>
+        <StylesProvider>
+          <QueryProvider>
+            <TooltipProvider>{children}</TooltipProvider>
+            <Toaster />
+          </QueryProvider>
+        </StylesProvider>
       </body>
     </html>
   );

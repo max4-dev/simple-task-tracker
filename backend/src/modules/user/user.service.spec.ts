@@ -9,10 +9,10 @@ describe('UserService password change', () => {
   const findUnique = jest.fn<(...args: unknown[]) => Promise<unknown>>();
   const updateMany =
     jest.fn<(...args: unknown[]) => Promise<{ count: number }>>();
-  const revoke = jest.fn<(id: string) => Promise<void>>();
+  const revoke = jest.fn<(id: string, version: number) => Promise<void>>();
   const service = new UserService(
     { user: { findUnique, updateMany } } as unknown as PrismaService,
-    { removeAllUserTokens: revoke } as unknown as TokenService,
+    { removeTokenVersion: revoke } as unknown as TokenService,
   );
   let passwordHash: string;
 
@@ -75,7 +75,7 @@ describe('UserService password change', () => {
     });
     expect(update.data.tokenVersion).toEqual({ increment: 1 });
     expect(await verify(update.data.password, 'new-long-password')).toBe(true);
-    expect(revoke).toHaveBeenCalledWith('user');
+    expect(revoke).toHaveBeenCalledWith('user', 3);
   });
   it('rejects a concurrent winner without revoking that newer session', async () => {
     updateMany.mockResolvedValue({ count: 0 });

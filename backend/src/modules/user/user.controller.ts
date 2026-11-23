@@ -8,6 +8,7 @@ import {
   Patch,
   Put,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiCookieAuth,
@@ -18,6 +19,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { PasswordThrottlerGuard } from '../auth/guards/password-throttler.guard.js';
 import { Auth } from '../auth/decorators/auth.decorator.js';
 import { TokenCookieService } from '../auth/services/token-cookie.service.js';
 import { CurrentUser } from './decorators/user.decorator.js';
@@ -58,6 +60,7 @@ export class UserController {
   }
 
   @ApiOperation({ summary: 'Сменить пароль и завершить все сессии' })
+  @UseGuards(PasswordThrottlerGuard)
   @Put('password')
   async updatePassword(
     @CurrentUser('id') id: string,

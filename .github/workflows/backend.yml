@@ -1,0 +1,62 @@
+name: Backend
+
+on:
+  pull_request:
+    paths:
+      [
+        "backend/**",
+        ".github/workflows/backend.yml",
+        ".gitignore",
+        ".gitattributes",
+      ]
+  push:
+    paths:
+      [
+        "backend/**",
+        ".github/workflows/backend.yml",
+        ".gitignore",
+        ".gitattributes",
+      ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      IMAGE_TAG: ci
+      DOMAIN_API_IMAGE: task-tracker-api:ci
+      DOMAIN_MIGRATION_IMAGE: task-tracker-migrate:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run prisma:generate
+      - run: npm run prisma:validate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --runInBand
+      - run: npm run test:e2e -- --runInBand
+      - run: npm run test:tooling
+      - run: python3 scripts/check-agent-setup.py
+      - run: npm run env:init
+      - run: docker compose config --quiet
+      - run: docker compose pull postgres redis
+      - run: docker compose build api migrate
+      - run: npm run test:domain

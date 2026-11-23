@@ -85,6 +85,7 @@ export class ProjectAccessService {
           );
         return operation(tx, context);
       },
+      'shared',
     );
   }
 }

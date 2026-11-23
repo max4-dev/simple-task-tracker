@@ -111,7 +111,6 @@ export class OrganizationRolesService {
               members: true,
               projectMembers: true,
               projectOverrides: true,
-              invitations: true,
             },
           },
         },
@@ -121,6 +120,39 @@ export class OrganizationRolesService {
         throw new ConflictException(
           'Роль используется участниками, проектами или приглашениями',
         );
+      const now = new Date();
+      if (
+        await tx.organizationInvitation.count({
+          where: {
+            organizationId,
+            roleId,
+            acceptedAt: null,
+            revokedAt: null,
+            expiresAt: { gt: now },
+          },
+        })
+      )
+        throw new ConflictException(
+          'Роль используется активными приглашениями',
+        );
+      await tx.organizationInvitation.updateMany({
+        where: {
+          organizationId,
+          roleId,
+          acceptedAt: null,
+          revokedAt: null,
+          expiresAt: { lte: now },
+        },
+        data: { revokedAt: now },
+      });
+      await tx.organizationInvitation.updateMany({
+        where: {
+          organizationId,
+          roleId,
+          OR: [{ acceptedAt: { not: null } }, { revokedAt: { not: null } }],
+        },
+        data: { roleId: null },
+      });
       await tx.organizationRole.delete({
         where: { organizationId_id: { organizationId, id: roleId } },
       });

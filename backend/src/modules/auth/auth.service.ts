@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -43,14 +44,25 @@ export class AuthService {
         throw new ConflictException('Email уже используется');
       throw error;
     }
-    await this.startSession(user, res);
-    return { user: this.present(user) };
+    try {
+      await this.startSession(user, res);
+      return { user: this.present(user), authenticated: true };
+    } catch (error) {
+      if (!(error instanceof ServiceUnavailableException)) throw error;
+      this.cookies.clearAuthCookie(res);
+      // The account is committed. A client should retry login, not registration.
+      return {
+        user: this.present(user),
+        authenticated: false,
+        code: 'SESSION_UNAVAILABLE',
+      };
+    }
   }
 
   async login(dto: LoginDto, res: Response) {
     const user = await this.validateUser(dto);
     await this.startSession(user, res);
-    return { user: this.present(user) };
+    return { user: this.present(user), authenticated: true };
   }
 
   private async validateUser(dto: LoginDto) {
@@ -81,22 +93,49 @@ export class AuthService {
     if (!user || user.tokenVersion !== payload.tokenVersion)
       throw new UnauthorizedException();
     const tokens = this.issueTokens(user);
-    if (!(await this.tokens.rotateTokens(user.id, refresh, tokens)))
+    if (
+      !(await this.tokens.rotateTokens(
+        user.id,
+        user.tokenVersion,
+        refresh,
+        tokens,
+      ))
+    )
       throw new UnauthorizedException();
+    await this.assertCurrentVersion(user);
     this.cookies.setAuthCookies(res, tokens);
-    return { user: this.present(user) };
+    return { user: this.present(user), authenticated: true };
   }
 
-  async logout(userId: string, req: Request, res: Response) {
-    await this.tokens.revokeSession(userId, req.cookies.accessToken);
+  async logout(userId: string, version: number, req: Request, res: Response) {
+    await this.tokens.revokeSession(userId, version, req.cookies.accessToken);
     this.cookies.clearAuthCookie(res);
     return { message: 'Успешный выход' };
   }
 
   private async startSession(user: User, res: Response) {
     const tokens = this.issueTokens(user);
-    await this.tokens.saveTokens(user.id, tokens);
+    try {
+      await this.tokens.saveTokens(user.id, user.tokenVersion, tokens);
+    } catch {
+      throw new ServiceUnavailableException({
+        code: 'SESSION_UNAVAILABLE',
+        message: 'Не удалось открыть сессию. Повторите вход позже',
+      });
+    }
+    await this.assertCurrentVersion(user);
     this.cookies.setAuthCookies(res, tokens);
+  }
+
+  private async assertCurrentVersion(user: User) {
+    const current = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { tokenVersion: true },
+    });
+    if (!current || current.tokenVersion !== user.tokenVersion)
+      throw new UnauthorizedException(
+        'Учётные данные изменились. Войдите повторно',
+      );
   }
 
   private issueTokens(user: User) {

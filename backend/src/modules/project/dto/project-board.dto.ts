@@ -1,4 +1,9 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  OmitType,
+  PartialType,
+} from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsEnum,
@@ -45,7 +50,7 @@ export class CreateProjectStatusDto {
   position?: number;
 }
 export class UpdateProjectStatusDto extends PartialType(
-  CreateProjectStatusDto,
+  OmitType(CreateProjectStatusDto, ['position'] as const),
   { skipNullProperties: false },
 ) {}
 

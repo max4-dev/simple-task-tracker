@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { z } from 'zod';
 import { TIME } from '../../constants/index.js';
 
@@ -15,8 +16,37 @@ const integer = (fallback: number, max: number) =>
 
 export const configSchema = z.object({
   NODE_ENV: z.enum(NodeEnv).default(NodeEnv.DEVELOPMENT),
+  NOTIFICATION_WORKER_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   PORT: integer(3001, 65535),
   JWT_SECRET: z.string().min(32),
+  TRUSTED_PROXY_CIDRS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    )
+    .refine(
+      (values) =>
+        values.every((value) => {
+          const [address, prefix, extra] = value.split('/');
+          const family = isIP(address);
+          return (
+            !!family &&
+            extra === undefined &&
+            (prefix === undefined ||
+              (/^\d+$/.test(prefix) &&
+                Number(prefix) >= 1 &&
+                Number(prefix) <= (family === 4 ? 32 : 128)))
+          );
+        }),
+      'Expected explicit trusted proxy IP addresses or CIDRs; universal trust is forbidden',
+    ),
   PUBLIC_API_URL: z
     .string()
     .default('http://localhost:3001')

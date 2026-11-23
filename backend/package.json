@@ -37,7 +37,8 @@
     "audit:prod": "npm audit --omit=dev --omit=optional",
     "test:redis": "node --env-file=.env scripts/check-redis.mjs",
     "test:domain": "npm run build && node scripts/check-domain.mjs",
-    "typecheck": "tsc --noEmit --incremental false"
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:tooling": "node --test scripts/tooling.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "12.5.0",
