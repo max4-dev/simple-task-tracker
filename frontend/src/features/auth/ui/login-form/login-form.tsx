@@ -9,8 +9,8 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { ROUTES } from "@/shared/config";
 import { Button, Input, Label, toast } from "@/shared/ui";
-import { login } from "../../api/login";
-import { loginSchema, type LoginValues } from "../../model/login.schema";
+import { authQuery } from "../../api";
+import { loginSchema, type LoginValues } from "../../model";
 import styles from "./login-form.module.css";
 import type { LoginFormProps } from "./login-form.props";
 
@@ -25,7 +25,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
   async function submit(values: LoginValues) {
     clearErrors("root");
     try {
-      await login(values);
+      await authQuery.login(values);
       toast.add({ title: "Вы вошли в аккаунт", type: "success" });
       router.replace(ROUTES.HOME);
       router.refresh();

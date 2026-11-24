@@ -1,6 +1,7 @@
 export const ROUTES = {
   HOME: "/",
   LOGIN: "/login",
+  REGISTER: "/register",
 } as const;
 
 export const API_ROUTES = {
